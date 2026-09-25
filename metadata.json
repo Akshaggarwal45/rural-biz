@@ -1,0 +1,6 @@
+{
+  "name": "RuralBiz - Rural Business Recommendation & Government Schemes Finder",
+  "description": "Empowering rural and semi-urban entrepreneurs with smart business ideas, loan financial planning, and verified location-based government subsidies and schemes across India.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
