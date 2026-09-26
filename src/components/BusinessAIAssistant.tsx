@@ -104,6 +104,7 @@ export const BusinessAIAssistant: React.FC<BusinessAIAssistantProps> = ({
       setLoading(false);
     }
   };
+
   const samplePrompts = [
     `Best business with ₹1 Lakh capital in village?`,
     `EMI for ₹3,00,000 loan at 9.5% for 5 years`,
