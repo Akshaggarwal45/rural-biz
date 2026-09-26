@@ -97,14 +97,20 @@ export const BusinessAIAssistant: React.FC<BusinessAIAssistantProps> = ({
       setMessages((prev) => [...prev, aiMsg]);
     } catch (err: any) {
       console.error('Chat error:', err);
-      const fallbackMsg: Message = {
+      let errorText = "⚠️ Unable to contact AI. Please check your network and try again.";
+      if (err?.message === 'MISSING_API_KEY') {
+        errorText = "⚠️ **Gemini API Key Required**\n\nPlease add `VITE_GEMINI_API_KEY` in Vercel Settings > Environment Variables, then redeploy.";
+      } else if (err?.message) {
+        errorText = `⚠️ **AI Error**: ${err.message}`;
+      }
+      const errMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'ai',
-        text: "Here is your business & EMI advice:\n\n" +
-              "• **Top Village Businesses**: Dairy (3-5 cows, ₹30k/mo profit), Poultry Broiler (₹25k/mo), Mini Spices/Atta Mill (₹35k/mo), Rural Kirana Store (₹30k/mo).\n" +
-              "• **EMI Calculation Example**: For a ₹2,00,000 bank loan at 9.5% for 5 years, your monthly EMI is approx **₹4,199/month**.\n" +
-              "• **Subsidy Support**: Apply for PMEGP via jansamarth.in to get up to 35% margin money subsidy in rural areas!",
+        text: errorText,
         timestamp: 'Just now',
+      };
+      setMessages((prev) => [...prev, errMsg]);
+    }
       };
       setMessages((prev) => [...prev, fallbackMsg]);
     } finally {
