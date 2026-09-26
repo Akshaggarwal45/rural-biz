@@ -51,7 +51,7 @@ export const BusinessAIAssistant: React.FC<BusinessAIAssistantProps> = ({
   }, [initialPrompt]);
 
   const handleSend = async (textToSend?: string) => {
-    const messageText = (textToSend || query).trim();
+    const messageText = textToSend || query.trim();
     if (!messageText || loading) return;
 
     const userMsg: Message = {
@@ -69,23 +69,13 @@ export const BusinessAIAssistant: React.FC<BusinessAIAssistantProps> = ({
       const stateObj = INDIAN_STATES.find((s) => s.id === selectedState);
       const stateName = stateObj ? stateObj.name : 'All India';
 
-      const res = await fetch('/api/assistant/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: messageText,
-          location: locationType,
-          state: stateName,
-          capital: Number(capital) || 100000,
-        }),
+      const { askBusinessAssistant } = await import('../utils/aiService');
+      const aiResponseText = await askBusinessAssistant({
+        query: messageText,
+        location: locationType,
+        state: stateName,
+        capital: Number(capital) || 100000,
       });
-
-      if (!res.ok) {
-        throw new Error(`Server returned ${res.status}`);
-      }
-
-      const data = await res.json();
-      const aiResponseText = data.response || 'I am ready to help you plan your business and calculate your loan EMIs!';
 
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -97,7 +87,7 @@ export const BusinessAIAssistant: React.FC<BusinessAIAssistantProps> = ({
       setMessages((prev) => [...prev, aiMsg]);
     } catch (err: any) {
       console.error('Chat error:', err);
-      let errorText = "⚠️ Unable to contact AI. Please check your network and try again.";
+      let errorText = "⚠️ Unable to generate AI response. Please check your connection.";
       if (err?.message === 'MISSING_API_KEY') {
         errorText = "⚠️ **Gemini API Key Required**\n\nPlease add `VITE_GEMINI_API_KEY` in Vercel Settings > Environment Variables, then redeploy.";
       } else if (err?.message) {
@@ -110,14 +100,10 @@ export const BusinessAIAssistant: React.FC<BusinessAIAssistantProps> = ({
         timestamp: 'Just now',
       };
       setMessages((prev) => [...prev, errMsg]);
-    }
-      };
-      setMessages((prev) => [...prev, fallbackMsg]);
     } finally {
       setLoading(false);
     }
   };
-
   const samplePrompts = [
     `Best business with ₹1 Lakh capital in village?`,
     `EMI for ₹3,00,000 loan at 9.5% for 5 years`,
