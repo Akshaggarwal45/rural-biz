@@ -105,18 +105,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </option>
               ))}
             </select>
-
-            {/* Download RuralBiz.html Button */}
-            <a
-              href="/download/ruralbiz"
-              download="RuralBiz.html"
-              title="Download standalone offline RuralBiz.html"
-              className="hidden lg:inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg shadow-sm transition-all hover:scale-105 active:scale-95"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download .HTML</span>
-            </a>
-
             {/* Get Started Button */}
             <button
               onClick={onGetStarted}
