@@ -20,7 +20,7 @@ import {
 import { BUSINESS_CATALOG, BusinessIdea } from '../data/businesses';
 import { SCHEMES_DATABASE, INDIAN_STATES, GovernmentScheme } from '../data/schemes';
 import { SchemeDetailModal } from './SchemeDetailModal';
-
+import { InteractiveMapPicker } from './InteractiveMapPicker';
 export const Wizard: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const totalSteps = 4;
@@ -32,7 +32,11 @@ export const Wizard: React.FC = () => {
   const [userArea, setUserArea] = useState<'rural' | 'semi' | 'urban'>('rural');
   const [userCapital, setUserCapital] = useState<number>(100000);
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['land']);
-
+  const [userLocationName, setUserLocationName] = useState<string>('Uttar Pradesh');
+  const [userCoordinates, setUserCoordinates] = useState<{ lat?: number; lng?: number }>({
+    lat: 26.8467,
+    lng: 80.9462
+  });
   // Step 2 State
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessIdea>(BUSINESS_CATALOG.dairy);
 
@@ -311,6 +315,19 @@ export const Wizard: React.FC = () => {
                     <option value={1000000}>Above ₹5,00,000</option>
                   </select>
                 </div>
+                {/* Real-time Interactive Location Map */}
+                <InteractiveMapPicker
+                  selectedState={userState}
+                  locationName={userLocationName}
+                  onLocationChange={(loc, lat, lng) => {
+                    setUserLocationName(loc);
+                    if (lat && lng) {
+                      setUserCoordinates({ lat, lng });
+                    }
+                  }}
+                  areaType={userArea}
+                  onAreaTypeChange={(newArea) => setUserArea(newArea)}
+                />
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
