@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { SCHEMES_DATABASE, INDIAN_STATES, GovernmentScheme } from '../data/schemes';
 import { SchemeDetailModal } from './SchemeDetailModal';
-
+import { InteractiveMapPicker } from './InteractiveMapPicker';
 interface SchemeExplorerProps {
   initialState?: string;
   initialLocationType?: 'rural' | 'semi' | 'urban';
@@ -32,6 +32,8 @@ export const SchemeExplorer: React.FC<SchemeExplorerProps> = ({
   const [selectedSector, setSelectedSector] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeModalScheme, setActiveModalScheme] = useState<GovernmentScheme | null>(null);
+  const [showMap, setShowMap] = useState<boolean>(false);
+  const [locationName, setLocationName] = useState<string>('');
 
   // Sector Categories
   const sectors = [
@@ -106,15 +108,28 @@ export const SchemeExplorer: React.FC<SchemeExplorerProps> = ({
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-8 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
             
-            {/* 1. State Selector */}
+           {/* 1. State Selector */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                <span>Your State / Region</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Your State / Region</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowMap(!showMap)}
+                  className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>{showMap ? 'Hide Map' : '🗺️ Open Map'}</span>
+                </button>
+              </div>
               <select
                 value={selectedState}
-                onChange={(e) => setSelectedState(e.target.value)}
+                onChange={(e) => {
+                  setSelectedState(e.target.value);
+                  const stName = INDIAN_STATES.find(s => s.id === e.target.value)?.name || '';
+                  setLocationName(stName);
+                }}
                 className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm font-semibold rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 {INDIAN_STATES.map((st) => (
@@ -206,6 +221,19 @@ export const SchemeExplorer: React.FC<SchemeExplorerProps> = ({
               </button>
             ))}
           </div>
+        </div>
+        {/* Optional Collapsible Map for Scheme Explorer */}
+          {showMap && (
+            <div className="pt-4 border-t border-slate-200">
+              <InteractiveMapPicker
+                selectedState={selectedState}
+                locationName={locationName}
+                onLocationChange={(loc) => setLocationName(loc)}
+                areaType={locationType}
+                onAreaTypeChange={(area) => setLocationType(area)}
+              />
+            </div>
+          )}
         </div>
 
         {/* Location Verification Status Box */}
