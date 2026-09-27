@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+/* Leaflet Custom Marker & Map Styling */
+.custom-map-pin {
+  background: transparent;
+  border: none;
+}
+
+.leaflet-container {
+  font-family: inherit;
+  width: 100%;
+  height: 100%;
+}
