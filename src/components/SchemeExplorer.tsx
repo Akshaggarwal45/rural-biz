@@ -16,6 +16,7 @@ import {
 import { SCHEMES_DATABASE, INDIAN_STATES, GovernmentScheme } from '../data/schemes';
 import { SchemeDetailModal } from './SchemeDetailModal';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
+
 interface SchemeExplorerProps {
   initialState?: string;
   initialLocationType?: 'rural' | 'semi' | 'urban';
@@ -108,7 +109,7 @@ export const SchemeExplorer: React.FC<SchemeExplorerProps> = ({
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-8 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
             
-           {/* 1. State Selector */}
+            {/* 1. State Selector */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1">
@@ -221,8 +222,8 @@ export const SchemeExplorer: React.FC<SchemeExplorerProps> = ({
               </button>
             ))}
           </div>
-        </div>
-        {/* Optional Collapsible Map for Scheme Explorer */}
+
+          {/* Optional Collapsible Map for Scheme Explorer */}
           {showMap && (
             <div className="pt-4 border-t border-slate-200">
               <InteractiveMapPicker
