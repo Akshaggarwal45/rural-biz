@@ -8,6 +8,8 @@ import {
   ArrowLeft, 
   Check, 
   IndianRupee, 
+  Percent, 
+  Calendar, 
   ShieldCheck, 
   ExternalLink, 
   CheckCircle2, 
@@ -19,6 +21,7 @@ import { BUSINESS_CATALOG, BusinessIdea } from '../data/businesses';
 import { SCHEMES_DATABASE, INDIAN_STATES, GovernmentScheme } from '../data/schemes';
 import { SchemeDetailModal } from './SchemeDetailModal';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
+import { STATE_GEO_DATA } from '../data/geoData';
 
 export const Wizard: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -29,13 +32,13 @@ export const Wizard: React.FC = () => {
   const [userAge, setUserAge] = useState<string>('');
   const [userState, setUserState] = useState<string>('up');
   const [userArea, setUserArea] = useState<'rural' | 'semi' | 'urban'>('rural');
-  const [userCapital, setUserCapital] = useState<number>(100000);
-  const [selectedSkills, setSelectedSkills] = useState<string[]>(['land']);
   const [userLocationName, setUserLocationName] = useState<string>('Uttar Pradesh');
   const [userCoordinates, setUserCoordinates] = useState<{ lat?: number; lng?: number }>({
     lat: 26.8467,
     lng: 80.9462
   });
+  const [userCapital, setUserCapital] = useState<number>(100000);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>(['land']);
 
   // Step 2 State
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessIdea>(BUSINESS_CATALOG.dairy);
@@ -60,11 +63,14 @@ export const Wizard: React.FC = () => {
     const list = Object.values(BUSINESS_CATALOG);
     const scored = list.map((biz) => {
       let score = 0;
+      // Capital match
       if (userCapital >= biz.minCapital && userCapital <= biz.maxCapital * 1.8) score += 3;
       else if (userCapital >= biz.minCapital) score += 1;
 
+      // State match
       if (biz.bestForStates.includes('all') || biz.bestForStates.includes(userState)) score += 2;
 
+      // Skills match
       const matchingSkills = biz.skillsRequired.filter((s) => selectedSkills.includes(s));
       score += matchingSkills.length * 2;
 
@@ -78,6 +84,7 @@ export const Wizard: React.FC = () => {
   // Select business in Step 2
   const handleSelectBusiness = (biz: BusinessIdea) => {
     setSelectedBusiness(biz);
+    // suggest 25-30% contribution
     const suggested = Math.round(biz.setupCost * 0.25);
     setUserContribution(suggested);
   };
@@ -102,12 +109,15 @@ export const Wizard: React.FC = () => {
 
   // Matched Government Schemes for Step 4
   const matchedSchemes = SCHEMES_DATABASE.filter((scheme) => {
+    // 1. Matches State or Central
     const stateMatch =
       scheme.applicableStates.includes('all') || scheme.applicableStates.includes(userState);
     if (!stateMatch) return false;
 
+    // 2. Matches Location Type (Rural/Urban)
     if (!scheme.locationTypes.includes(userArea)) return false;
 
+    // 3. Matches sector
     const sectorMatch =
       scheme.targetSectors.includes('all') ||
       scheme.targetSectors.includes('general') ||
@@ -255,7 +265,7 @@ export const Wizard: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5 text-blue-600" />
@@ -277,22 +287,28 @@ export const Wizard: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    <span className="text-[11px] text-slate-500 block mt-1">
+                      Map will instantly pan and zoom to this state below.
+                    </span>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
                       <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Target Area Classification</span>
+                      <span>Area Type (Affects Subsidy %) <span className="text-red-500">*</span></span>
                     </label>
                     <select
                       value={userArea}
                       onChange={(e) => setUserArea(e.target.value as any)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     >
-                      <option value="rural">Rural Area (Highest 25-35% subsidy)</option>
+                      <option value="rural">Rural Village / Gram Panchayat (Up to 35% subsidy)</option>
                       <option value="semi">Semi-Urban / Block Level Town</option>
                       <option value="urban">Urban City Area (15-25% subsidy)</option>
                     </select>
+                    <span className="text-[11px] text-slate-500 block mt-1">
+                      Auto-adjusted when you pinpoint your village or town on map.
+                    </span>
                   </div>
                 </div>
 
