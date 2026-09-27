@@ -8,8 +8,6 @@ import {
   ArrowLeft, 
   Check, 
   IndianRupee, 
-  Percent, 
-  Calendar, 
   ShieldCheck, 
   ExternalLink, 
   CheckCircle2, 
@@ -21,6 +19,7 @@ import { BUSINESS_CATALOG, BusinessIdea } from '../data/businesses';
 import { SCHEMES_DATABASE, INDIAN_STATES, GovernmentScheme } from '../data/schemes';
 import { SchemeDetailModal } from './SchemeDetailModal';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
+
 export const Wizard: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const totalSteps = 4;
@@ -37,6 +36,7 @@ export const Wizard: React.FC = () => {
     lat: 26.8467,
     lng: 80.9462
   });
+
   // Step 2 State
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessIdea>(BUSINESS_CATALOG.dairy);
 
@@ -60,14 +60,11 @@ export const Wizard: React.FC = () => {
     const list = Object.values(BUSINESS_CATALOG);
     const scored = list.map((biz) => {
       let score = 0;
-      // Capital match
       if (userCapital >= biz.minCapital && userCapital <= biz.maxCapital * 1.8) score += 3;
       else if (userCapital >= biz.minCapital) score += 1;
 
-      // State match
       if (biz.bestForStates.includes('all') || biz.bestForStates.includes(userState)) score += 2;
 
-      // Skills match
       const matchingSkills = biz.skillsRequired.filter((s) => selectedSkills.includes(s));
       score += matchingSkills.length * 2;
 
@@ -81,7 +78,6 @@ export const Wizard: React.FC = () => {
   // Select business in Step 2
   const handleSelectBusiness = (biz: BusinessIdea) => {
     setSelectedBusiness(biz);
-    // suggest 25-30% contribution
     const suggested = Math.round(biz.setupCost * 0.25);
     setUserContribution(suggested);
   };
@@ -106,15 +102,12 @@ export const Wizard: React.FC = () => {
 
   // Matched Government Schemes for Step 4
   const matchedSchemes = SCHEMES_DATABASE.filter((scheme) => {
-    // 1. Matches State or Central
     const stateMatch =
       scheme.applicableStates.includes('all') || scheme.applicableStates.includes(userState);
     if (!stateMatch) return false;
 
-    // 2. Matches Location Type (Rural/Urban)
     if (!scheme.locationTypes.includes(userArea)) return false;
 
-    // 3. Matches sector
     const sectorMatch =
       scheme.targetSectors.includes('all') ||
       scheme.targetSectors.includes('general') ||
@@ -262,15 +255,20 @@ export const Wizard: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                      <span>State (For State-Specific Subsidies) <span className="text-red-500">*</span></span>
+                      <span>Select State <span className="text-red-500">*</span></span>
                     </label>
                     <select
                       value={userState}
-                      onChange={(e) => setUserState(e.target.value)}
+                      onChange={(e) => {
+                        const newState = e.target.value;
+                        setUserState(newState);
+                        const stateName = INDIAN_STATES.find((s) => s.id === newState)?.name || newState;
+                        setUserLocationName(stateName);
+                      }}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     >
                       {INDIAN_STATES.filter((s) => s.id !== 'all').map((st) => (
@@ -284,19 +282,33 @@ export const Wizard: React.FC = () => {
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
                       <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Area Type (Affects Subsidy %) <span className="text-red-500">*</span></span>
+                      <span>Target Area Classification</span>
                     </label>
                     <select
                       value={userArea}
                       onChange={(e) => setUserArea(e.target.value as any)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     >
-                      <option value="rural">Rural Village / Gram Panchayat (Up to 35% subsidy)</option>
+                      <option value="rural">Rural Area (Highest 25-35% subsidy)</option>
                       <option value="semi">Semi-Urban / Block Level Town</option>
                       <option value="urban">Urban City Area (15-25% subsidy)</option>
                     </select>
                   </div>
                 </div>
+
+                {/* Real-time Interactive Location Map */}
+                <InteractiveMapPicker
+                  selectedState={userState}
+                  locationName={userLocationName}
+                  onLocationChange={(loc, lat, lng) => {
+                    setUserLocationName(loc);
+                    if (lat && lng) {
+                      setUserCoordinates({ lat, lng });
+                    }
+                  }}
+                  areaType={userArea}
+                  onAreaTypeChange={(newArea) => setUserArea(newArea)}
+                />
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
@@ -315,19 +327,6 @@ export const Wizard: React.FC = () => {
                     <option value={1000000}>Above ₹5,00,000</option>
                   </select>
                 </div>
-                {/* Real-time Interactive Location Map */}
-                <InteractiveMapPicker
-                  selectedState={userState}
-                  locationName={userLocationName}
-                  onLocationChange={(loc, lat, lng) => {
-                    setUserLocationName(loc);
-                    if (lat && lng) {
-                      setUserCoordinates({ lat, lng });
-                    }
-                  }}
-                  areaType={userArea}
-                  onAreaTypeChange={(newArea) => setUserArea(newArea)}
-                />
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
@@ -523,9 +522,10 @@ export const Wizard: React.FC = () => {
                 <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-slate-950">
-                          {selectedStateName} • {areaLabel}
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-slate-950 flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          <span>{userLocationName || selectedStateName} • {areaLabel}</span>
                         </span>
                         <span className="text-xs text-blue-100 font-medium">Business: {selectedBusiness.name}</span>
                       </div>
