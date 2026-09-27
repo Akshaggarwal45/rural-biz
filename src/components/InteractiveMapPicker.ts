@@ -3,12 +3,7 @@ import {
   MapPin, 
   LocateFixed, 
   Search, 
-  Compass, 
-  Sparkles, 
   Loader2, 
-  Check, 
-  Maximize2,
-  Navigation,
   Info
 } from 'lucide-react';
 import { STATE_GEO_DATA, StateGeoInfo } from '../data/geoData';
@@ -32,26 +27,25 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
   const leafletMapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
-  const [inputVal, setInputVal] = useState<string>(locationName);
+  const [inputVal, setInputVal] = useState<string>(locationName || '');
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapLoaded, setMapLoaded] = useState<boolean>(false);
   const [addressDetails, setAddressDetails] = useState<string>('');
 
-  // Keep inputVal in sync if prop changes from outside
+  // Sync external locationName only when it actually differs
   useEffect(() => {
-    if (locationName && locationName !== inputVal) {
+    if (locationName !== undefined && locationName !== inputVal) {
       setInputVal(locationName);
     }
-  }, [locationName]);
+  }, [selectedState]);
 
-  // Load Leaflet dynamically via CDN without heavy bundle impact
+  // Load Leaflet dynamically via CDN
   useEffect(() => {
     let isMounted = true;
 
     const loadLeaflet = async () => {
-      // 1. Add CSS if not already present
+      // 1. Add CSS
       if (!document.getElementById('leaflet-css')) {
         const link = document.createElement('link');
         link.id = 'leaflet-css';
@@ -60,7 +54,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
         document.head.appendChild(link);
       }
 
-      // 2. Add Leaflet JS script if not present
+      // 2. Add Script
       if (!(window as any).L) {
         await new Promise((resolve, reject) => {
           const script = document.createElement('script');
@@ -77,14 +71,13 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
       const L = (window as any).L;
       if (!L) return;
 
-      // Determine initial center from State
       const stateInfo: StateGeoInfo = STATE_GEO_DATA[selectedState] || STATE_GEO_DATA.up;
       const initialLat = stateInfo.center[0];
       const initialLng = stateInfo.center[1];
       const initialZoom = stateInfo.zoom;
 
-      // Prevent re-initialization if already exists
-      if (!leafletMapRef.current) {
+      // Prevent duplicate map instances
+      if (!leafletMapRef.current && mapContainerRef.current) {
         const map = L.map(mapContainerRef.current, {
           center: [initialLat, initialLng],
           zoom: initialZoom,
@@ -92,13 +85,11 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
           scrollWheelZoom: true,
         });
 
-        // Crisp OpenStreetMap tiles with English / Regional labels
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; OpenStreetMap contributors',
           maxZoom: 19,
         }).addTo(map);
 
-        // Custom High-Contrast Marker Icon
         const customIcon = L.divIcon({
           className: 'custom-map-pin',
           html: `<div style="
@@ -129,9 +120,13 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
         markerRef.current = marker;
         leafletMapRef.current = map;
         setGeoCoords({ lat: initialLat, lng: initialLng });
-        setMapLoaded(true);
 
-        // Click on map to place pin & reverse geocode
+        // Fix grey tiles on mount
+        setTimeout(() => {
+          if (map) map.invalidateSize();
+        }, 200);
+
+        // Map Click
         map.on('click', async (e: any) => {
           const { lat, lng } = e.latlng;
           marker.setLatLng([lat, lng]);
@@ -139,7 +134,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
           await reverseGeocode(lat, lng);
         });
 
-        // Drag marker to adjust location
+        // Pin Drag
         marker.on('dragend', async () => {
           const { lat, lng } = marker.getLatLng();
           setGeoCoords({ lat, lng });
@@ -152,10 +147,15 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
 
     return () => {
       isMounted = false;
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+        markerRef.current = null;
+      }
     };
   }, []);
 
-  // When selectedState changes -> Pan and Zoom the map straight to that state!
+  // When selectedState changes -> Pan and Zoom smoothly to that state
   useEffect(() => {
     if (!leafletMapRef.current) return;
     const stateInfo: StateGeoInfo = STATE_GEO_DATA[selectedState] || STATE_GEO_DATA.up;
@@ -172,14 +172,12 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
       markerRef.current.setLatLng([lat, lng]);
       setGeoCoords({ lat, lng });
       setAddressDetails(`${stateInfo.name} (${stateInfo.capital} Region)`);
-      if (!inputVal || inputVal.trim() === '') {
-        setInputVal(`${stateInfo.name}`);
-        onLocationChange(`${stateInfo.name}`, lat, lng);
-      }
+      setInputVal(stateInfo.name);
+      onLocationChange(stateInfo.name, lat, lng);
     }
   }, [selectedState]);
 
-  // Reverse Geocoding via OpenStreetMap Nominatim
+  // Reverse Geocoding
   const reverseGeocode = async (lat: number, lng: number) => {
     try {
       const res = await fetch(
@@ -208,7 +206,6 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
         setAddressDetails(data.display_name || '');
         onLocationChange(displayLabel, lat, lng);
 
-        // Auto-detect rural vs urban based on address tags
         if (onAreaTypeChange) {
           if (addr.village || addr.hamlet || addr.isolated_dwelling) {
             onAreaTypeChange('rural');
@@ -224,7 +221,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
     }
   };
 
-  // Forward Geocoding: User types a village/district/town name in the box and presses Enter or Search
+  // Search Location
   const handleSearchLocation = async (queryText?: string) => {
     const q = (queryText !== undefined ? queryText : inputVal).trim();
     if (!q) return;
@@ -232,15 +229,12 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
     setIsSearching(true);
     try {
       const stateInfo = STATE_GEO_DATA[selectedState];
-      const stateFilter = stateInfo && selectedState !== 'all' ? `&countrycodes=in` : '&countrycodes=in';
-      
-      // Append state name to search query for precision if not already mentioned
       const refinedQuery = stateInfo && !q.toLowerCase().includes(stateInfo.name.toLowerCase()) 
         ? `${q}, ${stateInfo.name}, India` 
         : `${q}, India`;
 
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(refinedQuery)}${stateFilter}&limit=1`
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(refinedQuery)}&countrycodes=in&limit=1`
       );
       const results = await res.json();
 
@@ -255,28 +249,8 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
           setGeoCoords({ lat, lng });
           setAddressDetails(item.display_name);
 
-          const shortName = q;
-          setInputVal(shortName);
-          onLocationChange(shortName, lat, lng);
-        }
-      } else {
-        // Fallback search without state suffix
-        const fallbackRes = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(q + ', India')}&limit=1`
-        );
-        const fbResults = await fallbackRes.json();
-        if (fbResults && fbResults.length > 0) {
-          const item = fbResults[0];
-          const lat = parseFloat(item.lat);
-          const lng = parseFloat(item.lon);
-
-          if (leafletMapRef.current && markerRef.current) {
-            leafletMapRef.current.flyTo([lat, lng], 13, { duration: 1.2 });
-            markerRef.current.setLatLng([lat, lng]);
-            setGeoCoords({ lat, lng });
-            setAddressDetails(item.display_name);
-            onLocationChange(q, lat, lng);
-          }
+          setInputVal(q);
+          onLocationChange(q, lat, lng);
         }
       }
     } catch (err) {
@@ -286,7 +260,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
     }
   };
 
-  // GPS "Locate Me" button using browser geolocation
+  // GPS "Locate Me"
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
@@ -370,10 +344,8 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
             type="text"
             value={inputVal}
             placeholder={`e.g. ${stateInfo.popularDistricts[0] || 'Varanasi'}, Village Rampur...`}
-            onChange={(e) => {
-              setInputVal(e.target.value);
-              onLocationChange(e.target.value, geoCoords?.lat, geoCoords?.lng);
-            }}
+            onChange={(e) => setInputVal(e.target.value)}
+            onBlur={() => onLocationChange(inputVal, geoCoords?.lat, geoCoords?.lng)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -427,7 +399,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
           style={{ minHeight: '260px' }}
         />
 
-        {/* Real-time Status Overlay on the bottom of the map */}
+        {/* Real-time Status Overlay */}
         <div className="absolute bottom-2 left-2 right-2 bg-slate-900/85 backdrop-blur-md text-white px-3 py-2 rounded-lg text-xs flex items-center justify-between z-[400] shadow-md border border-white/10">
           <div className="flex items-center gap-2 overflow-hidden truncate">
             <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
