@@ -56,7 +56,7 @@ ${emiText}
 Respond dynamically and specifically to the user's question with actionable steps, real numbers, and official portals like jansamarth.in or kviconline.gov.in. Never output canned generic responses.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nUser Question: ${query}` }] }]
     });
 
