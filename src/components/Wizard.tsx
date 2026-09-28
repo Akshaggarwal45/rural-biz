@@ -15,12 +15,20 @@ import {
   CheckCircle2, 
   RotateCcw,
   Landmark,
-  FileText
+  FileText,
+  Loader2,
+  HelpCircle,
+  Lightbulb,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  TrendingUp,
+  AlertCircle
 } from 'lucide-react';
 import { BUSINESS_CATALOG, BusinessIdea } from '../data/businesses';
 import { SCHEMES_DATABASE, INDIAN_STATES, GovernmentScheme } from '../data/schemes';
 import { SchemeDetailModal } from './SchemeDetailModal';
-import { InteractiveMapPicker } from './InteractiveMapPicker';
+import { InteractiveMapPicker, NearbyPlace } from './InteractiveMapPicker';
 import { STATE_GEO_DATA } from '../data/geoData';
 
 export const Wizard: React.FC = () => {
@@ -39,9 +47,25 @@ export const Wizard: React.FC = () => {
   });
   const [userCapital, setUserCapital] = useState<number>(100000);
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['land']);
+  const [userScenario, setUserScenario] = useState<string>('');
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[]>([]);
 
-  // Step 2 State
+  // Step 2 State (AI & Recommendations)
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessIdea>(BUSINESS_CATALOG.dairy);
+  const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
+  const [marketAnalysis, setMarketAnalysis] = useState<string>('');
+  const [scenarioEvaluation, setScenarioEvaluation] = useState<{
+    verdict?: string;
+    verdictColor?: 'emerald' | 'amber' | 'rose' | string;
+    shouldProceed?: string;
+    directAnswer?: string;
+    criticalRisks?: string[];
+    keyStrengths?: string[];
+    betterAlternatives?: string[];
+    actionSteps?: string[];
+  } | null>(null);
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState<boolean>(false);
+  const [recommendationSource, setRecommendationSource] = useState<string>('catalog');
 
   // Step 3 State
   const [userContribution, setUserContribution] = useState<number>(75000);
@@ -129,12 +153,70 @@ export const Wizard: React.FC = () => {
   const selectedStateName = INDIAN_STATES.find((s) => s.id === userState)?.name || 'Your State';
   const areaLabel = userArea === 'rural' ? 'Rural Village' : userArea === 'semi' ? 'Semi-Urban Town' : 'Urban City';
 
+  // Fetch Gemini AI Recommendations using Location, Skills, and Nearby Places
+  const fetchGeminiRecommendations = async () => {
+    setIsLoadingRecommendations(true);
+    try {
+      const res = await fetch('/api/business/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userName,
+          userState,
+          userArea,
+          locationName: userLocationName,
+          userCapital,
+          skills: selectedSkills,
+          userScenario,
+          nearbyPlaces,
+          coordinates: userCoordinates
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && Array.isArray(data.recommendedBusinesses) && data.recommendedBusinesses.length > 0) {
+        setAiRecommendations(data.recommendedBusinesses);
+        setMarketAnalysis(data.marketAnalysis || '');
+        setScenarioEvaluation(data.scenarioEvaluation || null);
+        setRecommendationSource(data.source || 'gemini-ai');
+
+        // Automatically set first recommendation as active (which is the user's custom venture if provided)
+        const first = data.recommendedBusinesses[0];
+        const convertedFirst: BusinessIdea = {
+          id: first.id,
+          name: first.name,
+          sectorKey: first.sectorKey || 'dairy',
+          tag: first.tag || 'Agriculture',
+          minCapital: first.minCapital || 50000,
+          maxCapital: first.maxCapital || 300000,
+          setupCost: first.setupCost || 150000,
+          monthlyRevenue: first.monthlyRevenue || 40000,
+          monthlyCost: first.monthlyCost || 18000,
+          description: first.description,
+          skillsRequired: first.skillsRequired || ['land'],
+          equipment: first.equipment || 'Standard equipment',
+          rawMaterials: first.rawMaterials || 'Standard materials',
+          bestForStates: [userState],
+          matchedSchemes: ['pmegp', 'mudra', 'up-mmysy', 'maha-cmegp'],
+        };
+        setSelectedBusiness(convertedFirst);
+        setUserContribution(Math.round(convertedFirst.setupCost * 0.25));
+      }
+    } catch (err) {
+      console.warn('Error fetching Gemini recommendations, using catalog fallback:', err);
+    } finally {
+      setIsLoadingRecommendations(false);
+    }
+  };
+
   const handleNext = () => {
     if (currentStep === 1) {
       if (!userName.trim()) {
         alert('Please enter your name to continue.');
         return;
       }
+      // Trigger AI Recommendation engine
+      fetchGeminiRecommendations();
     }
     if (currentStep === 3) {
       if (userContribution < 0) {
@@ -324,6 +406,7 @@ export const Wizard: React.FC = () => {
                   }}
                   areaType={userArea}
                   onAreaTypeChange={(newArea) => setUserArea(newArea)}
+                  onPlacesFound={(places) => setNearbyPlaces(places)}
                 />
 
                 <div>
@@ -336,6 +419,7 @@ export const Wizard: React.FC = () => {
                     onChange={(e) => setUserCapital(Number(e.target.value))}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
+                    <option value={35000}>₹35,000 (Micro / Test Budget)</option>
                     <option value={50000}>Up to ₹50,000</option>
                     <option value={100000}>₹50,000 - ₹1,00,000</option>
                     <option value={250000}>₹1,00,000 - ₹2,50,000</option>
@@ -378,59 +462,355 @@ export const Wizard: React.FC = () => {
                     ))}
                   </div>
                 </div>
+
+                {/* Tell Us Your Current Scenario & Desired Business */}
+                <div className="bg-gradient-to-br from-blue-50/80 via-indigo-50/40 to-slate-50 border border-blue-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-blue-900 mb-1">
+                      <Sparkles className="w-4 h-4 text-blue-600" />
+                      <span>Tell Us Your Current Scenario / Desired Business</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 normal-case tracking-normal">
+                        AI Feasibility Check
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Describe your situation and resources (e.g. <em>"I want to start a farming business; I have 2 acres of land and ₹1 Lakh, should I do it or not?"</em>). Our AI directly evaluates whether you should proceed and suggests high-profit options you could do with those exact resources.
+                    </p>
+                  </div>
+
+                  <div className="relative">
+                    <textarea
+                      rows={3}
+                      value={userScenario}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setUserScenario(val);
+                        // Auto-sync capital slider if user types specific amount in text
+                        const capMatch = val.match(/(?:₹|rs\.?|inr)?\s*([0-9]{1,2},[0-9]{2,3},[0-9]{3}|[0-9]{1,2},[0-9]{3}|[0-9]{4,7})/i);
+                        if (capMatch && capMatch[1]) {
+                          const parsed = parseInt(capMatch[1].replace(/,/g, ''), 10);
+                          if (!isNaN(parsed) && parsed >= 10000 && parsed <= 5000000) {
+                            setUserCapital(parsed);
+                          }
+                        }
+                      }}
+                      placeholder="e.g. I want to start a farming business, currently I have 2 acres of irrigated farmland, tube well, and ₹1.5 Lakh savings. Should I do conventional farming, dairy, or something else with these resources?"
+                      className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none shadow-2xs"
+                    />
+                  </div>
+
+                  {/* Quick Scenario Starters */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                      <Lightbulb className="w-3 h-3 text-amber-500" /> Try an example:
+                    </span>
+                    {[
+                      {
+                        label: '🌱 Farming with 2 Acres Land',
+                        text: 'I want to start a farming business. I have 2 acres of agricultural land, a borewell, and ₹1.2 Lakh capital. Should I do it or not, and what are my best options?',
+                        capital: 120000,
+                        skills: ['land']
+                      },
+                      {
+                        label: '⚠️ Low Capital Dairy (Test Risk Check)',
+                        text: 'I want to start a dairy farm with 3 cows and processing machinery, but I only have ₹35,000 savings. Should I do it?',
+                        capital: 35000,
+                        skills: ['animals']
+                      },
+                      {
+                        label: '🏪 Roadside Shop & Computer',
+                        text: 'I have a small commercial room near the village main road and basic computer skills with ₹75,000. What is the most profitable business I should open?',
+                        capital: 75000,
+                        skills: ['shop', 'sales']
+                      }
+                    ].map((example, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setUserScenario(example.text);
+                          if (example.capital) setUserCapital(example.capital);
+                          if (example.skills) setSelectedSkills(example.skills);
+                        }}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white hover:bg-blue-100/70 text-slate-700 hover:text-blue-800 border border-slate-200/90 shadow-2xs transition-colors cursor-pointer"
+                      >
+                        {example.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
             {/* STEP 2: BUSINESS RECOMMENDATIONS */}
             {currentStep === 2 && (
               <div className="space-y-6 animate-fade-in">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">Step 2: Recommended Businesses for Your Profile</h3>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                    Filtered for <strong className="text-slate-700">{selectedStateName}</strong> ({areaLabel}) with ₹{userCapital.toLocaleString('en-IN')} capital capacity.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-slate-900">Step 2: Recommended Businesses for Your Profile</h3>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                        <Sparkles className="w-3 h-3 text-purple-600" />
+                        <span>Gemini AI + Location Places</span>
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                      Personalized for <strong className="text-slate-800">{userLocationName}</strong> ({areaLabel}) • Capital ₹{userCapital.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={fetchGeminiRecommendations}
+                    disabled={isLoadingRecommendations}
+                    className="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg border border-purple-200 transition-colors disabled:opacity-50"
+                  >
+                    {isLoadingRecommendations ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Analyzing Local Market...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Re-analyze with AI</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {getRecommendations().slice(0, 4).map((biz) => {
-                    const isSelected = selectedBusiness.id === biz.id;
-                    const profit = biz.monthlyRevenue - biz.monthlyCost;
+                {/* Nearby Places Detected Badge */}
+                {nearbyPlaces.length > 0 && (
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-600 truncate">
+                      <MapPin className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="truncate">
+                        <strong>Nearby competition scanned:</strong> {nearbyPlaces.slice(0, 3).map(p => p.name).join(', ')} {nearbyPlaces.length > 3 ? `+${nearbyPlaces.length - 3} more` : ''}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Live Map Data
+                    </span>
+                  </div>
+                )}
 
-                    return (
-                      <div
-                        key={biz.id}
-                        onClick={() => handleSelectBusiness(biz)}
-                        className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
-                          isSelected
-                            ? 'border-blue-600 bg-blue-50/50 shadow-md'
-                            : 'border-slate-200 hover:border-blue-300 bg-white'
-                        }`}
-                      >
-                        {isSelected && (
-                          <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs">
-                            <Check className="w-3.5 h-3.5" />
-                          </div>
-                        )}
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700">
-                          {biz.tag}
-                        </span>
-                        <h4 className="text-base font-bold text-slate-900 mt-1.5">{biz.name}</h4>
-                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">{biz.description}</p>
+                {/* Local Market Analysis from Gemini */}
+                {marketAnalysis && (
+                  <div className="p-4 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 rounded-2xl border border-blue-200/80 text-xs text-slate-700 space-y-1">
+                    <span className="font-bold text-blue-900 block flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      Location Commercial Landscape & Opportunity Analysis:
+                    </span>
+                    <p className="leading-relaxed">{marketAnalysis}</p>
+                  </div>
+                )}
 
-                        <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                {/* AI Scenario Evaluation & Direct Answer Banner */}
+                {scenarioEvaluation && (() => {
+                  const isRed = scenarioEvaluation.verdictColor === 'rose';
+                  const isAmber = scenarioEvaluation.verdictColor === 'amber';
+                  const borderColor = isRed ? 'border-rose-500' : isAmber ? 'border-amber-500' : 'border-emerald-500';
+                  const headerBg = isRed ? 'bg-rose-50 text-rose-800' : isAmber ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800';
+                  const badgeColor = isRed ? 'bg-rose-100 text-rose-800 border-rose-300' : isAmber ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                  const answerBg = isRed ? 'bg-rose-50/80 border-rose-200 text-rose-950' : isAmber ? 'bg-amber-50/80 border-amber-200 text-amber-950' : 'bg-emerald-50/60 border-emerald-200 text-emerald-950';
+
+                  return (
+                    <div className={`bg-white border-2 ${borderColor} rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-8 h-8 rounded-xl ${headerBg} flex items-center justify-center shrink-0 shadow-2xs`}>
+                            {isRed ? (
+                              <XCircle className="w-5 h-5 text-rose-600" />
+                            ) : isAmber ? (
+                              <AlertTriangle className="w-5 h-5 text-amber-600" />
+                            ) : (
+                              <CheckCircle className="w-5 h-5 text-emerald-600" />
+                            )}
+                          </span>
                           <div>
-                            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Setup Cost</span>
-                            <span className="font-bold text-slate-800">₹{biz.setupCost.toLocaleString('en-IN')}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Monthly Profit</span>
-                            <span className="font-bold text-emerald-600">₹{profit.toLocaleString('en-IN')}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                              Objective AI Feasibility Audit
+                            </span>
+                            <h4 className="text-sm sm:text-base font-extrabold text-slate-900">
+                              {scenarioEvaluation.verdict || 'Feasible & Highly Recommended'}
+                            </h4>
                           </div>
                         </div>
+
+                        <span className={`self-start sm:self-auto px-3 py-1 rounded-full text-xs font-bold border ${badgeColor} flex items-center gap-1.5`}>
+                          <span>Should you do it?</span>
+                          <strong>{scenarioEvaluation.shouldProceed || (isRed ? 'No / High Risk' : isAmber ? 'Proceed with Caution' : 'Yes')}</strong>
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+
+                      {userScenario && (
+                        <div className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-start gap-2">
+                          <span className="font-semibold text-slate-700 not-italic shrink-0">Your Input:</span>
+                          <span className="line-clamp-2">"{userScenario}"</span>
+                        </div>
+                      )}
+
+                      {/* Direct Answer */}
+                      <div className={`text-xs sm:text-sm leading-relaxed p-3.5 rounded-xl border ${answerBg}`}>
+                        <strong className="block mb-1 font-bold text-xs uppercase tracking-wide opacity-90">
+                          Direct Economic Advisor Assessment:
+                        </strong>
+                        <p className="whitespace-pre-line">{scenarioEvaluation.directAnswer}</p>
+                      </div>
+
+                      {/* Critical Risks Callout (Especially when AI Disagrees / Cautions) */}
+                      {scenarioEvaluation.criticalRisks && scenarioEvaluation.criticalRisks.length > 0 && (
+                        <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-3 text-xs space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-rose-900 font-bold">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>Financial & Operational Risks Identified in Your Scenario:</span>
+                          </div>
+                          <ul className="list-disc list-inside text-rose-800 space-y-0.5 pl-1">
+                            {scenarioEvaluation.criticalRisks.map((risk, i) => (
+                              <li key={i}>{risk}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Better Alternatives Recommended by AI */}
+                      {scenarioEvaluation.betterAlternatives && scenarioEvaluation.betterAlternatives.length > 0 && (
+                        <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-3 text-xs space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-indigo-900 font-bold">
+                            <TrendingUp className="w-4 h-4 text-indigo-600 shrink-0" />
+                            <span>Recommended Pivots / Higher-Margin Alternatives with Your Resources:</span>
+                          </div>
+                          <ul className="list-disc list-inside text-indigo-950 space-y-0.5 pl-1">
+                            {scenarioEvaluation.betterAlternatives.map((alt, i) => (
+                              <li key={i}>{alt}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Key Strengths & Actionable Step */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-xs">
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                          <span className="font-bold text-slate-800 block mb-1">💡 Existing Asset / Strength:</span>
+                          <span className="text-slate-600">{scenarioEvaluation.keyStrengths?.[0] || 'Local land or trade experience.'}</span>
+                        </div>
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                          <span className="font-bold text-slate-800 block mb-1">🚀 Actionable Next Step:</span>
+                          <span className="text-slate-600">{scenarioEvaluation.actionSteps?.[0] || 'Apply for 35% PMEGP margin money subsidy on JanSamarth portal.'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Recommendation Cards */}
+                {isLoadingRecommendations ? (
+                  <div className="p-12 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
+                    <p className="text-sm font-semibold text-slate-700">
+                      Analyzing nearby market competition, location demographics, and 2025 subsidies...
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Formulating your specific requirements...
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {(aiRecommendations.length > 0 ? aiRecommendations : getRecommendations().slice(0, 4)).map((biz: any, index: number) => {
+                      const isSelected = selectedBusiness.id === biz.id;
+                      const profit = biz.profit || (biz.monthlyRevenue - biz.monthlyCost);
+                      const isUserCustomIdea = (biz.id === 'user-proposed-plan' || biz.id === 'user-custom-venture' || (index === 0 && userScenario && userScenario.trim().length > 5));
+
+                      return (
+                        <div
+                          key={biz.id}
+                          onClick={() => {
+                            const converted: BusinessIdea = {
+                              id: biz.id,
+                              name: biz.name,
+                              sectorKey: biz.sectorKey || 'dairy',
+                              tag: biz.tag || 'Agriculture',
+                              minCapital: biz.minCapital || 50000,
+                              maxCapital: biz.maxCapital || 300000,
+                              setupCost: biz.setupCost || 150000,
+                              monthlyRevenue: biz.monthlyRevenue || 40000,
+                              monthlyCost: biz.monthlyCost || 18000,
+                              description: biz.description,
+                              skillsRequired: biz.skillsRequired || ['land'],
+                              equipment: biz.equipment || 'Standard equipment',
+                              rawMaterials: biz.rawMaterials || 'Standard materials',
+                              bestForStates: [userState],
+                              matchedSchemes: ['pmegp', 'mudra', 'up-mmysy', 'maha-cmegp'],
+                            };
+                            handleSelectBusiness(converted);
+                          }}
+                          className={`p-4 sm:p-5 rounded-2xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${
+                            isSelected
+                              ? 'border-blue-600 bg-blue-50/50 shadow-md ring-2 ring-blue-500/20'
+                              : isUserCustomIdea
+                              ? 'border-indigo-300 bg-indigo-50/20 hover:border-indigo-400'
+                              : 'border-slate-200 hover:border-blue-300 bg-white'
+                          }`}
+                        >
+                          <div>
+                            {isSelected && (
+                              <div className="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs shadow-xs">
+                                <Check className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                              {isUserCustomIdea && (
+                                <span className="px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-indigo-600 text-white shadow-2xs flex items-center gap-1">
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  <span>Your Stated Idea</span>
+                                </span>
+                              )}
+                              <span className="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700">
+                                {biz.tag}
+                              </span>
+                              {biz.eligibleSubsidies && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                                  PMEGP 35% / Subsidy
+                                </span>
+                              )}
+                            </div>
+
+                            <h4 className="text-base font-bold text-slate-900 line-clamp-1">{biz.name}</h4>
+                            <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">{biz.description}</p>
+
+                            {/* Equipment & Material Preview Pill */}
+                            {biz.equipment && (
+                              <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                                <strong className="text-slate-800">Key Equipment: </strong>
+                                <span className="line-clamp-1">{biz.equipment}</span>
+                              </div>
+                            )}
+
+                            {/* Why it fits this location */}
+                            {biz.whyItFitsLocation && (
+                              <div className="mt-2 p-2 bg-purple-50/80 rounded-xl border border-purple-100 text-[11px] text-purple-900 leading-snug">
+                                <span className="font-bold">📍 Market Fit: </span>
+                                <span className="line-clamp-2">{biz.whyItFitsLocation}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Setup Cost</span>
+                              <span className="font-bold text-slate-900 text-sm">₹{Number(biz.setupCost).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Monthly Profit</span>
+                              <span className="font-bold text-emerald-600 text-sm">₹{Number(profit).toLocaleString('en-IN')}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -444,18 +824,40 @@ export const Wizard: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs sm:text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Estimated Machinery / Setup:</span>
-                    <span className="font-semibold text-slate-800">{selectedBusiness.equipment}</span>
+                <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-3.5 text-xs sm:text-sm">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <span className="font-bold text-slate-900 text-xs uppercase tracking-wide flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Required Setup & Operational Inputs for {selectedBusiness.name}</span>
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                      Sector: {selectedBusiness.tag}
+                    </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Initial Working Capital & Materials:</span>
-                    <span className="font-semibold text-slate-800">{selectedBusiness.rawMaterials}</span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                      <div className="flex items-center gap-1.5 text-blue-900 font-bold text-xs">
+                        <span>⚙️ Required Machinery & Equipment:</span>
+                      </div>
+                      <p className="text-slate-700 text-xs leading-relaxed font-medium">
+                        {selectedBusiness.equipment || 'Specialized commercial setup machinery and tools.'}
+                      </p>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                      <div className="flex items-center gap-1.5 text-emerald-900 font-bold text-xs">
+                        <span>📦 Required Raw Materials & Initial Inventory:</span>
+                      </div>
+                      <p className="text-slate-700 text-xs leading-relaxed font-medium">
+                        {selectedBusiness.rawMaterials || 'Initial operating inventory, packaging supplies, and stock.'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex justify-between border-t border-slate-200 pt-2 font-bold text-slate-900">
-                    <span>Total Required Project Cost:</span>
-                    <span>₹{setupCost.toLocaleString('en-IN')}</span>
+
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-200 font-bold text-slate-900 text-sm">
+                    <span className="text-slate-700">Total Estimated Project Outlay:</span>
+                    <span className="text-base text-blue-700">₹{setupCost.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 
@@ -553,6 +955,24 @@ export const Wizard: React.FC = () => {
                       <span className="text-[11px] text-blue-100 block font-semibold uppercase">Net Monthly Profit</span>
                       <span className="text-lg font-bold text-emerald-300">₹{monthlyProfit.toLocaleString('en-IN')}</span>
                       <span className="text-[10px] text-blue-200 block">Clearance: ~{clearanceYears} Years</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project Setup & Equipment Requirements Card */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3">
+                  <h4 className="font-bold text-slate-900 uppercase tracking-wider text-xs flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                    <span>Project Infrastructure & Procurement Requirements ({selectedBusiness.name})</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                      <span className="font-bold text-slate-800 block">⚙️ Fixed Machinery & Setup:</span>
+                      <p className="text-slate-600 leading-relaxed">{selectedBusiness.equipment}</p>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs space-y-1">
+                      <span className="font-bold text-slate-800 block">📦 Recurring Inputs & Working Stock:</span>
+                      <p className="text-slate-600 leading-relaxed">{selectedBusiness.rawMaterials}</p>
                     </div>
                   </div>
                 </div>
